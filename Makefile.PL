@@ -14,4 +14,5 @@ WriteMakefile(
         'Validate::Tiny' => 0.08
     },
     test => { TESTS => 't/*.t' },
+    PREREQ_PRINT => 1,
 );

@@ -3,7 +3,7 @@ use Mojo::Base 'Mojolicious::Plugin';
 
 use Validate::Tiny;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 sub register {
     my ( $self, $app, $conf ) = @_;
@@ -13,7 +13,14 @@ sub register {
         do_validation => sub {
             my ( $self, $rules, $params ) = @_;
             $params ||= $self->req->params->to_hash;
-
+            
+            if (ref $rules eq 'ARRAY') {
+                $rules = {
+                    checks => $rules,
+                };
+            }
+            $rules->{fields} ||= [keys %$params];
+                  
             my $result = Validate::Tiny->new( $params, $rules );
             if ( $result->success ) {
                 $self->app->log->debug('ValidateTiny: Successful');
@@ -101,47 +108,64 @@ Mojolicious::Plugin::ValidateTiny - Mojolicious Plugin
   
 =head1 DESCRIPTION
 
-    L<Mojolicious::Plugin::ValidateTiny> is a L<Validate::Tiny> support in L<Mojolicious>.
+L<Mojolicious::Plugin::ValidateTiny> is a L<Validate::Tiny> support in L<Mojolicious>.
 
 =head1 METHODS
 
-    L<Mojolicious::Plugin::ValidateTiny> inherits all methods from
-    L<Mojolicious::Plugin> and implements the following new ones.
+L<Mojolicious::Plugin::ValidateTiny> inherits all methods from
+L<Mojolicious::Plugin> and implements the following new ones.
 
 =head2 C<register>
 
     $plugin->register;
 
-    Register plugin in L<Mojolicious> application.
+Register plugin in L<Mojolicious> application.
 
 
 =head1 HELPERS
 
-=head2 validate
+=head2 C<validate>
 
-    $self->validate($validate_rules);
+Validates parameters with provided rules and automatically set errors.
 
-    Validate parameters with provided validator and automatically set errors.
+$VALIDATE_RULES - Validate::Tiny rules in next form
 
-=head2 validator_has_errors
+    {
+        checks  => $CHECKS, # Required
+        fields  => [],      # Optional (will check all GET+POST parameters)
+        filters => [],      # Optional
+    }
+
+You can pass only "checks" array to "do_validation". 
+In this case validator will take all GET+POST parameters as "fields"
+
+returns false if validation failed
+returns true  if validation succeded
+
+    $self->do_validation($VALIDATE_RULES)
+    $self->do_validation($CHECKS);
+
+=head2 C<validator_has_errors>
+
+Check if there are any errors.
 
     %= if (validator_has_errors) {
         <div class="error">Please, correct the errors below.</div>
     % }
 
-Check if there are any errors.
 
-=head2 validator_error
+
+=head2 C<validator_error>
+
+Returns the appropriate error.
 
     my $errors_hash = $self->validator_error();
     my $username_error = $self->validator_error('username');
 
     <%= validator_error 'username' %>
 
-    Render the appropriate error.
-
 =head1 SEE ALSO
 
-    L<Validate::Tiny>, L<Mojolicious>, L<Mojolicious::Plugin::Validator> 
+L<Validate::Tiny>, L<Mojolicious>, L<Mojolicious::Plugin::Validator> 
 
 =cut
