@@ -1,50 +1,107 @@
 package Mojolicious::Plugin::ValidateTiny;
 use Mojo::Base 'Mojolicious::Plugin';
 
-use Validate::Tiny;
+use v5.10;
+use strict;
+use warnings;
 
-our $VERSION = '0.03';
+use Carp qw/croak/;
+ 
+use Data::Dumper;
+use Validate::Tiny;
+use Mojo::Util qw/camelize/;
+use v5.10;
+
+our $VERSION = '0.04';
+
+# TODO check in after_static_dispatch hook that there are params and should be validated
+# in after_dispatch hook check that in action validation was called
 
 sub register {
     my ( $self, $app, $conf ) = @_;
-    $conf ||= {};
+    my $log = $app->log;
 
+    # Processing config
+    $conf = {
+        strict    => 0,
+        autorules => 0,
+        exclude   => [],
+        %{ $conf || {} } };
+
+    if ( $conf->{autorules} && ref $conf->{autorules} ne 'CODE' ) {
+        $conf->{autorules} = 0;
+
+    }
+
+    # Helper do_validation
     $app->helper(
         do_validation => sub {
-            my ( $self, $rules, $params ) = @_;
-            $params ||= $self->req->params->to_hash;
+            my ( $c, $rules, $params ) = @_;
+            croak "ValidateTiny: Wrong validatation rules"
+                unless ref($rules) ~~ [ 'ARRAY', 'HASH' ];
+
+            # Fo not use strict mode if params were passed explicitly
+            local $conf->{strict} = 0 if $params;
             
             if (ref $rules eq 'ARRAY') {
-                $rules = {
-                    checks => $rules,
-                };
+                if ( $conf->{strict} ) {
+                    die "ValidateTiny: you should pass 'fields' and 'checks' in strict mode!\n";
+                } else {
+                    $rules = { checks => $rules };
+                }
             }
-            $rules->{fields} ||= [keys %$params];
-                  
+
+            # Validate GET+POST parameters by default
+            $params ||= $c->req->params->to_hash;
+            $rules->{fields} ||= [];
+            push @{$rules->{fields}}, keys %$params;
+            my %h;
+            @{$rules->{fields}} = grep { !$h{$_}++ } @{$rules->{fields}};    
+
+            # Check that there is an individual rule for every field
+            if ( $conf->{strict} ) {
+                my %h = @{ $rules->{checks} };
+                my @fields_wo_rules;
+
+                foreach my $f ( @{ $rules->{fields} } ) {
+                    next if $f ~~ $conf->{exclude};
+                    push @fields_wo_rules, $f unless exists $h{$f};
+                }
+
+                if (@fields_wo_rules) {
+                    my $err_msg = 'ValidateTiny: No validation rules for '
+                        . join( ', ', map { qq'"$_"' } @fields_wo_rules );
+                    die $err_msg . "\n";
+                }
+            }
+
+            # Do validation
             my $result = Validate::Tiny->new( $params, $rules );
             if ( $result->success ) {
-                $self->app->log->debug('ValidateTiny: Successful');
+                $log->debug('ValidateTiny: Successful');
                 return $result->data;
             } else {
-                $self->app->log->debug('ValidateTiny: Failed: ' . join( ' ,' , keys %{$result->error} ));
-                $self->stash( validate_tiny_errors => $result->error );
+                $log->debug( 'ValidateTiny: Failed: ' . join( ', ', keys %{ $result->error } ) );
+                $c->stash( validate_tiny_errors => $result->error );
                 return;
             }
         } );
 
+    # Helper validator_has_errors
     $app->helper(
         validator_has_errors => sub {
-            my $self   = shift;
-            my $errors = $self->stash('validate_tiny_errors');
+            my $c      = shift;
+            my $errors = $c->stash('validate_tiny_errors');
 
             return 0 if !$errors || !keys %$errors;
             return 1;
         } );
 
+    # Helper validator_error
     $app->helper(
         validator_error => sub {
-            my ( $self, $name ) = @_;
-            my $errors = $self->stash('validate_tiny_errors');
+            my ( $c, $name ) = @_;
+            my $errors = $c->stash('validate_tiny_errors');
 
             return $errors unless defined $name;
 
@@ -52,6 +109,100 @@ sub register {
                 return $errors->{$name};
             }
         } );
+
+    # Helper validator_one_error
+    $app->helper(
+        validator_any_error => sub {
+            my ( $c ) = @_;
+            my $errors = $c->stash('validate_tiny_errors');
+            
+            if ( $errors ) {
+                return ( ( values %$errors )[0] );
+            }
+            
+            return;
+        } );
+
+    # Enabling automatic validation
+    if ( my $code = $conf->{autorules} ) {
+        $app->hook(
+            after_static_dispatch => sub {
+                my ($c) = @_;
+                my ( $class, $action ) = $self->_get_class_and_action($c);
+                return 1 unless $class && $action;
+                return 1 unless @{[$c->param]};
+
+                eval {
+                    my $rules = $code->( $class, $action );
+                    $c->do_validation($rules);
+                };
+
+                if ($@) {
+                    $log->warn($@);
+                
+                    $c->rendered(
+                        status => 403,
+                        text   => "Forbidden!",
+                    );
+
+                    return;
+                }
+
+                return 1;
+            } );
+    }
+}
+
+sub _get_class_and_action {
+    my ( $self, $c ) = @_;
+    my $routes = $c->app->routes;
+
+    # Path
+    my $req  = $c->req;
+    my $path = $c->stash->{path};
+    if ( defined $path ) { $path = "/$path" if $path !~ /^\// }
+    else                 { $path = $req->url->path->to_abs_string }
+
+    # Match
+    my $method    = $req->method;
+    my $websocket = $c->tx->is_websocket ? 1 : 0;
+    my $m         = Mojolicious::Routes::Match->new( $method => $path, $websocket );
+    $m->match($routes);
+
+    # No match
+    return unless $m && @{ $m->stack };
+
+    my $field = $m->captures;
+
+    my $action = $field->{action};
+
+    my $class = $self->_generate_class( $field, $c );
+
+    return ( $class, $action );
+}
+
+sub _generate_class {
+    my ( $self, $field, $c ) = @_;
+
+    # Class
+    my $class = $field->{class};
+    my $controller = $field->{controller} || '';
+    unless ($class) {
+        $class = $controller;
+        camelize $class;
+    }
+
+    # Namespace
+    my $namespace = $field->{namespace};
+    return unless $class || $namespace;
+    $namespace = $c->app->routes->namespace unless defined $namespace;
+    $class = length $class ? "${namespace}::$class" : $namespace
+        if length $namespace;
+
+    # Invalid
+    return unless $class =~ /^[a-zA-Z0-9_:]+$/;
+
+    return $class;
 }
 
 1;
