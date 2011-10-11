@@ -52,7 +52,7 @@ sub register {
             }
 
             # Validate GET+POST parameters by default
-            $params ||= $c->req->params->to_hash;
+            $params ||= { map { $_ => $c->param($_) } $c->param };
             $rules->{fields} ||= [];
             push @{$rules->{fields}}, keys %$params;
             my %h;
