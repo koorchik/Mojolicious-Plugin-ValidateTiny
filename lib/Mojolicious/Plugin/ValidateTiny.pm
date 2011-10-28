@@ -12,7 +12,7 @@ use Validate::Tiny;
 use Mojo::Util qw/camelize/;
 use v5.10;
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 # TODO check in after_static_dispatch hook that there are params and should be validated
 # in after_dispatch hook check that in action validation was called
@@ -23,9 +23,10 @@ sub register {
 
     # Processing config
     $conf = {
-        strict    => 0,
-        autorules => 0,
-        exclude   => [],
+        explicit   => 0,
+        autorules  => 0,
+        autofields => 1,
+        exclude    => [],
         %{ $conf || {} } };
 
     if ( $conf->{autorules} && ref $conf->{autorules} ne 'CODE' ) {
@@ -40,26 +41,28 @@ sub register {
             croak "ValidateTiny: Wrong validatation rules"
                 unless ref($rules) ~~ [ 'ARRAY', 'HASH' ];
 
-            # Fo not use strict mode if params were passed explicitly
-            local $conf->{strict} = 0 if $params;
-            
-            if (ref $rules eq 'ARRAY') {
-                if ( $conf->{strict} ) {
-                    die "ValidateTiny: you should pass 'fields' and 'checks' in strict mode!\n";
-                } else {
-                    $rules = { checks => $rules };
-                }
-            }
+            $rules = { checks => $rules } if ref $rules eq 'ARRAY';
+            $rules->{fields} ||= [];
 
             # Validate GET+POST parameters by default
             $params ||= { map { $_ => $c->param($_) } $c->param };
-            $rules->{fields} ||= [];
-            push @{$rules->{fields}}, keys %$params;
+            
+            # Autofill fields
+            if ( $conf->{autofields} ) {
+                push @{$rules->{fields}}, keys %$params;
+                for ( my $i = 0; $i< @{$rules->{checks}}; $i += 2 ){
+                    my $field = $rules->{checks}[$i];
+                    next if ref $field eq 'Regexp';
+                    push @{$rules->{fields}}, $field;
+                }
+            }
+            
+            # Remove fields duplications
             my %h;
             @{$rules->{fields}} = grep { !$h{$_}++ } @{$rules->{fields}};    
 
             # Check that there is an individual rule for every field
-            if ( $conf->{strict} ) {
+            if ( $conf->{explicit} ) {
                 my %h = @{ $rules->{checks} };
                 my @fields_wo_rules;
 
@@ -71,7 +74,14 @@ sub register {
                 if (@fields_wo_rules) {
                     my $err_msg = 'ValidateTiny: No validation rules for '
                         . join( ', ', map { qq'"$_"' } @fields_wo_rules );
-                    die $err_msg . "\n";
+                    
+                    my $errors = {};
+                    foreach my $f (@fields_wo_rules) {
+                        $errors->{$f} = "No validation rules for field \"$f\"";
+                    }
+                    $c->stash( validate_tiny_errors => $errors);
+                    $log->debug($err_msg);
+                    return 0;
                 }
             }
 
