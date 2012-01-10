@@ -4,17 +4,10 @@ use Mojo::Base 'Mojolicious::Plugin';
 use v5.10;
 use strict;
 use warnings;
-
 use Carp qw/croak/;
- 
 use Validate::Tiny;
-use Mojo::Util qw/camelize/;
-use v5.10;
 
-our $VERSION = '0.06';
-
-# TODO check in after_static_dispatch hook that there are params and should be validated
-# in after_dispatch hook check that in action validation was called
+our $VERSION = '0.07';
 
 sub register {
     my ( $self, $app, $conf ) = @_;
@@ -27,10 +20,6 @@ sub register {
         exclude    => [],
         %{ $conf || {} } };
 
-    if ( $conf->{autorules} && ref $conf->{autorules} ne 'CODE' ) {
-        $conf->{autorules} = 0;
-    }
-
     # Helper do_validation
     $app->helper(
         do_validation => sub {
@@ -38,7 +27,7 @@ sub register {
             croak "ValidateTiny: Wrong validatation rules"
                 unless ref($rules) ~~ [ 'ARRAY', 'HASH' ];
 
-            $c->stash('is_validate_tiny_called', 1);
+            $c->stash('was_validate_tiny_called', 1);
             
             $rules = { checks => $rules } if ref $rules eq 'ARRAY';
             $rules->{fields} ||= [];
@@ -106,9 +95,9 @@ sub register {
             return 1;
         } );
 
-    # Helper validator_errors
+    # Helper validator_error
     $app->helper(
-        validator_errors => sub {
+        validator_error => sub {
             my ( $c, $name ) = @_;
             my $errors = $c->stash('validate_tiny_errors');
 
@@ -138,7 +127,7 @@ sub register {
         after_dispatch => sub {
             my ($c) = @_;
             my $stash = $c->stash;
-            return 1 if $stash->{is_validate_tiny_called};
+            return 1 if $stash->{was_validate_tiny_called};
             
             if ( $stash->{controller} && $stash->{action} ) {
                 $log->debug("ValidateTiny: No validation in [$stash->{controller}#$stash->{action}]");    
@@ -164,25 +153,46 @@ Mojolicious::Plugin::ValidateTiny - Mojolicious Plugin
     # Mojolicious::Lite
     plugin 'ValidateTiny';
     
-    sub action {
+    sub action { 
+        my $self = shift;
+        my $validate_rules = [
+             # All of these are required
+             [qw/name email pass pass2/] => is_required(),
+
+             # pass2 must be equal to pass
+             pass2 => is_equal('pass'),
+
+             # custom sub validates an email address
+             email => sub {
+                my ( $value, $params ) = @_;
+                Email::Valid->address($value) ? undef : 'Invalid email';
+             }
+        ];
+        return unless $self->do_validation($validate_rules);
+        
+        ... Do something ...
+    }
+        
+        
+    sub action2 {
         my $self = shift;
 
-        # Validate $self->param()    
-        my $validate_rules = {};
-        if ( my $params =  $self->do_validation($validate_rules) ) {
+        my $validate_rules = { 
+            checks  => [...],
+            fields  => [...],
+            filters => [...]
+        };
+        if ( my $filtered_params =  $self->do_validation($validate_rules) ) {
             # all $params are validated and filters are applyed
-            ... do you action ...
+            ... do your action ...
 
-            # Validate custom data
-            my $rules = {...};
-            my $data = {...};
-            if ( my $data = $self->do_validation($rules, $data) ) {
-                
-            } else {
-                my $errors_hash = $self->validator_error();
-            }            
+         
         } else {
-            $self->render(status => '403', text => 'FORBIDDEN');  
+            my $errors     = $self->validator_error;             # hash with errors
+            my $pass_error = $self->validator_error('password'); # password error text
+            my $any_error  = $self->validator_any_error;         # any error text
+            
+            $self->render( status => '403', text => $any_error );  
         }
         
     }
@@ -204,32 +214,38 @@ Mojolicious::Plugin::ValidateTiny - Mojolicious Plugin
   
 =head1 DESCRIPTION
 
-L<Mojolicious::Plugin::ValidateTiny> is a L<Validate::Tiny> support in L<Mojolicious>.
-
-=head1 METHODS
-
-L<Mojolicious::Plugin::ValidateTiny> inherits all methods from
-L<Mojolicious::Plugin> and implements the following new ones.
-
-=head2 C<register>
-
-    $plugin->register;
-
-Register plugin in L<Mojolicious> application.
+L<Mojolicious::Plugin::ValidateTiny> is a L<Validate::Tiny> support for L<Mojolicious>.
 
 =head1 OPTIONS
 
-=head2 C<explicit>
+=head2 C<explicit> (default 0)
 
-DEFAULT 0
+If "explicit" is true then for every field must be provided check rule
 
-=head2 C<autofields>
+=head2 C<autofields> (default 1)
 
-DEFAULT 1
+If "autofields" then validator will automatically create fields list based on passed checks.
+So, you can pass: 
+    [
+        user => is_required(),
+        pass => is_required(),
+    ]
 
-=head2 C<exclude>
+instead of 
 
-DEFAULT []
+    {
+        fields => ['user', 'pass'],
+        checks => [
+            user => is_required(),
+            pass => is_required(),
+        ]
+    }
+
+=head2 C<exclude> (default [])
+
+Is an arrayref with a list of fields that will be never checked.
+
+For example, if you use "Mojolicious::Plugin::CSRFProtect" then you should add "csrftoken" to exclude list.
 
 =head1 HELPERS
 
@@ -245,7 +261,7 @@ $VALIDATE_RULES - Validate::Tiny rules in next form
         filters => [],      # Optional
     }
 
-You can pass only "checks" array to "do_validation". 
+You can pass only "checks" arrayref to "do_validation". 
 In this case validator will take all GET+POST parameters as "fields"
 
 returns false if validation failed
@@ -258,6 +274,10 @@ returns true  if validation succeded
 =head2 C<validator_has_errors>
 
 Check if there are any errors.
+
+    if ($self->validator_has_errors) {
+        $self->render_text( $self->validator_any_error );
+    }
 
     %= if (validator_has_errors) {
         <div class="error">Please, correct the errors below.</div>
@@ -276,6 +296,13 @@ Returns the appropriate error.
     
 Returns any of the existing errors. This method is usefull if you want return only one error.
 
+=head1 AUTHOR
+
+Viktor Turskyi <koorchik@cpan.org>
+
+=head1 BUGS
+
+Please report any bugs or feature requests to Github L<https://github.com/koorchik/Mojolicious-Plugin-ValidateTiny>
 
 =head1 SEE ALSO
 
