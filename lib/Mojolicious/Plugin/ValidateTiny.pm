@@ -143,7 +143,7 @@ sub register {
 
 =head1 NAME
 
-Mojolicious::Plugin::ValidateTiny - Mojolicious Plugin
+Mojolicious::Plugin::ValidateTiny - Lightweight validator for Mojolicious
 
 =head1 SYNOPSIS
 
