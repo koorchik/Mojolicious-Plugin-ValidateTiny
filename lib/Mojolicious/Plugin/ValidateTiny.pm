@@ -7,12 +7,11 @@ use warnings;
 
 use Carp qw/croak/;
  
-use Data::Dumper;
 use Validate::Tiny;
 use Mojo::Util qw/camelize/;
 use v5.10;
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 # TODO check in after_static_dispatch hook that there are params and should be validated
 # in after_dispatch hook check that in action validation was called
@@ -24,14 +23,12 @@ sub register {
     # Processing config
     $conf = {
         explicit   => 0,
-        autorules  => 0,
         autofields => 1,
         exclude    => [],
         %{ $conf || {} } };
 
     if ( $conf->{autorules} && ref $conf->{autorules} ne 'CODE' ) {
         $conf->{autorules} = 0;
-
     }
 
     # Helper do_validation
@@ -41,6 +38,8 @@ sub register {
             croak "ValidateTiny: Wrong validatation rules"
                 unless ref($rules) ~~ [ 'ARRAY', 'HASH' ];
 
+            $c->stash('is_validate_tiny_called', 1);
+            
             $rules = { checks => $rules } if ref $rules eq 'ARRAY';
             $rules->{fields} ||= [];
 
@@ -107,9 +106,9 @@ sub register {
             return 1;
         } );
 
-    # Helper validator_error
+    # Helper validator_errors
     $app->helper(
-        validator_error => sub {
+        validator_errors => sub {
             my ( $c, $name ) = @_;
             my $errors = $c->stash('validate_tiny_errors');
 
@@ -133,86 +132,22 @@ sub register {
             return;
         } );
 
-    # Enabling automatic validation
-    if ( my $code = $conf->{autorules} ) {
-        $app->hook(
-            after_static_dispatch => sub {
-                my ($c) = @_;
-                my ( $class, $action ) = $self->_get_class_and_action($c);
-                return 1 unless $class && $action;
-                return 1 unless @{[$c->param]};
 
-                eval {
-                    my $rules = $code->( $class, $action );
-                    $c->do_validation($rules);
-                };
-
-                if ($@) {
-                    $log->warn($@);
-                
-                    $c->rendered(
-                        status => 403,
-                        text   => "Forbidden!",
-                    );
-
-                    return;
-                }
-
-                return 1;
-            } );
-    }
-}
-
-sub _get_class_and_action {
-    my ( $self, $c ) = @_;
-    my $routes = $c->app->routes;
-
-    # Path
-    my $req  = $c->req;
-    my $path = $c->stash->{path};
-    if ( defined $path ) { $path = "/$path" if $path !~ /^\// }
-    else                 { $path = $req->url->path->to_abs_string }
-
-    # Match
-    my $method    = $req->method;
-    my $websocket = $c->tx->is_websocket ? 1 : 0;
-    my $m         = Mojolicious::Routes::Match->new( $method => $path, $websocket );
-    $m->match($routes);
-
-    # No match
-    return unless $m && @{ $m->stack };
-
-    my $field = $m->captures;
-
-    my $action = $field->{action};
-
-    my $class = $self->_generate_class( $field, $c );
-
-    return ( $class, $action );
-}
-
-sub _generate_class {
-    my ( $self, $field, $c ) = @_;
-
-    # Class
-    my $class = $field->{class};
-    my $controller = $field->{controller} || '';
-    unless ($class) {
-        $class = $controller;
-        camelize $class;
-    }
-
-    # Namespace
-    my $namespace = $field->{namespace};
-    return unless $class || $namespace;
-    $namespace = $c->app->routes->namespace unless defined $namespace;
-    $class = length $class ? "${namespace}::$class" : $namespace
-        if length $namespace;
-
-    # Invalid
-    return unless $class =~ /^[a-zA-Z0-9_:]+$/;
-
-    return $class;
+    # Print info about actions without validation    
+    $app->hook(
+        after_dispatch => sub {
+            my ($c) = @_;
+            my $stash = $c->stash;
+            return 1 if $stash->{is_validate_tiny_called};
+            
+            if ( $stash->{controller} && $stash->{action} ) {
+                $log->debug("ValidateTiny: No validation in [$stash->{controller}#$stash->{action}]");    
+                return 0;
+            }
+            
+            return 1;
+    } );
+    
 }
 
 1;
@@ -282,10 +217,23 @@ L<Mojolicious::Plugin> and implements the following new ones.
 
 Register plugin in L<Mojolicious> application.
 
+=head1 OPTIONS
+
+=head2 C<explicit>
+
+DEFAULT 0
+
+=head2 C<autofields>
+
+DEFAULT 1
+
+=head2 C<exclude>
+
+DEFAULT []
 
 =head1 HELPERS
 
-=head2 C<validate>
+=head2 C<do_validation>
 
 Validates parameters with provided rules and automatically set errors.
 
@@ -306,6 +254,7 @@ returns true  if validation succeded
     $self->do_validation($VALIDATE_RULES)
     $self->do_validation($CHECKS);
 
+
 =head2 C<validator_has_errors>
 
 Check if there are any errors.
@@ -313,8 +262,6 @@ Check if there are any errors.
     %= if (validator_has_errors) {
         <div class="error">Please, correct the errors below.</div>
     % }
-
-
 
 =head2 C<validator_error>
 
@@ -324,6 +271,11 @@ Returns the appropriate error.
     my $username_error = $self->validator_error('username');
 
     <%= validator_error 'username' %>
+    
+=head2 C<validator_any_error>
+    
+Returns any of the existing errors. This method is usefull if you want return only one error.
+
 
 =head1 SEE ALSO
 

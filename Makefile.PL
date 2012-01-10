@@ -10,7 +10,7 @@ WriteMakefile(
     VERSION_FROM => 'lib/Mojolicious/Plugin/ValidateTiny.pm',
     AUTHOR       => 'Viktor Turskyi <koorchik@cpan.org>',
     PREREQ_PM    => {
-        'Mojolicious'    => 1.90,
+        'Mojolicious'    => 2.42,
         'Validate::Tiny' => 0.08
     },
     test => { TESTS => 't/*.t' },
