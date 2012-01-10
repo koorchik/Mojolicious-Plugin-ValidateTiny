@@ -2,3 +2,6 @@ Revision history for Mojolicious::Plugin::ValidateTiny
 
 0.07
         First version, released on an unsuspecting world.
+        
+0.08
+        Fixed typo

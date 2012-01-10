@@ -9,6 +9,7 @@ WriteMakefile(
     NAME         => 'Mojolicious::Plugin::ValidateTiny',
     VERSION_FROM => 'lib/Mojolicious/Plugin/ValidateTiny.pm',
     AUTHOR       => 'Viktor Turskyi <koorchik@cpan.org>',
+    MIN_PERL_VERSION => 5.010,
     PREREQ_PM    => {
         'Mojolicious'    => 2.42,
         'Validate::Tiny' => 0.08
