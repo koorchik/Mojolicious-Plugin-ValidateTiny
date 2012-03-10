@@ -75,6 +75,7 @@ sub register {
 
             # Do validation
             my $result = Validate::Tiny->new( $params, $rules );
+            $c->stash( __validator__ => $result );
             if ( $result->success ) {
                 $log->debug('ValidateTiny: Successful');
                 return $result->data;
@@ -121,6 +122,19 @@ sub register {
             return;
         } );
 
+    # Helper validator_error_string
+    $app->helper(
+        validator_error_string => sub {
+            my ( $c, $params ) = @_;
+            my $errors    = $c->stash('validate_tiny_errors');
+            my $validator = $c->stash('__validator__');
+
+            $params //= {};
+
+            return '' unless $errors;
+
+            return $validator->error_string(%$params);
+        } );
 
     # Print info about actions without validation    
     $app->hook(
