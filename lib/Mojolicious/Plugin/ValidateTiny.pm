@@ -310,6 +310,12 @@ Returns the appropriate error.
     
 Returns any of the existing errors. This method is usefull if you want return only one error.
 
+=head2 C<validator_error_string>
+
+Returns a string containing all errors (an empty string in case of no errors).
+
+Takes a hashref as an optional argument which is then passed to original C<error_string()> method (see L<Validate::Tiny/"error_string">).
+
 =head1 AUTHOR
 
 Viktor Turskyi <koorchik@cpan.org>
