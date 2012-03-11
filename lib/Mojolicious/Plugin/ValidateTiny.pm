@@ -75,6 +75,7 @@ sub register {
 
             # Do validation
             my $result = Validate::Tiny->new( $params, $rules );
+            $c->stash( __validator__ => $result );
             if ( $result->success ) {
                 $log->debug('ValidateTiny: Successful');
                 return $result->data;
@@ -121,6 +122,19 @@ sub register {
             return;
         } );
 
+    # Helper validator_error_string
+    $app->helper(
+        validator_error_string => sub {
+            my ( $c, $params ) = @_;
+            my $errors    = $c->stash('validate_tiny_errors');
+            my $validator = $c->stash('__validator__');
+
+            $params //= {};
+
+            return '' unless $errors;
+
+            return $validator->error_string(%$params);
+        } );
 
     # Print info about actions without validation    
     $app->hook(
@@ -295,6 +309,12 @@ Returns the appropriate error.
 =head2 C<validator_any_error>
     
 Returns any of the existing errors. This method is usefull if you want return only one error.
+
+=head2 C<validator_error_string>
+
+Returns a string containing all errors (an empty string in case of no errors).
+
+Takes a hashref as an optional argument which is then passed to original C<error_string()> method (see L<Validate::Tiny/"error_string">).
 
 =head1 AUTHOR
 
