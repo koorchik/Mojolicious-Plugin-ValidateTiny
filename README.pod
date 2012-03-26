@@ -1,3 +1,4 @@
+
 =head1 NAME
 
 Mojolicious::Plugin::ValidateTiny - Lightweight validator for Mojolicious
@@ -148,6 +149,15 @@ Returns the appropriate error.
     my $username_error = $self->validator_error('username');
 
     <%= validator_error 'username' %>
+
+=head2 C<validator_error_string>
+
+Returns a string with all errors (an empty string in case of no errors).
+Helper maps directly to Validate::Tiny::error_string method ( see L<Validate::Tiny/"error_string"> )
+
+    my $error_str = $self->validator_error_string();
+
+    <%= validator_error_string %>
     
 =head2 C<validator_any_error>
     

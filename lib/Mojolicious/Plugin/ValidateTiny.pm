@@ -7,7 +7,7 @@ use warnings;
 use Carp qw/croak/;
 use Validate::Tiny;
 
-our $VERSION = '0.08';
+our $VERSION = '0.10';
 
 sub register {
     my ( $self, $app, $conf ) = @_;
@@ -27,7 +27,7 @@ sub register {
             croak "ValidateTiny: Wrong validatation rules"
                 unless ref($rules) ~~ [ 'ARRAY', 'HASH' ];
 
-            $c->stash('was_validate_tiny_called', 1);
+            $c->stash('validate_tiny.was_called', 1);
             
             $rules = { checks => $rules } if ref $rules eq 'ARRAY';
             $rules->{fields} ||= [];
@@ -67,7 +67,7 @@ sub register {
                     foreach my $f (@fields_wo_rules) {
                         $errors->{$f} = "No validation rules for field \"$f\"";
                     }
-                    $c->stash( validate_tiny_errors => $errors);
+                    $c->stash( 'validate_tiny.errors' => $errors);
                     $log->debug($err_msg);
                     return 0;
                 }
@@ -75,12 +75,14 @@ sub register {
 
             # Do validation
             my $result = Validate::Tiny->new( $params, $rules );
+            $c->stash( 'validate_tiny.result' => $result );
+            
             if ( $result->success ) {
                 $log->debug('ValidateTiny: Successful');
                 return $result->data;
             } else {
                 $log->debug( 'ValidateTiny: Failed: ' . join( ', ', keys %{ $result->error } ) );
-                $c->stash( validate_tiny_errors => $result->error );
+                $c->stash( 'validate_tiny.errors' => $result->error );
                 return;
             }
         } );
@@ -89,7 +91,7 @@ sub register {
     $app->helper(
         validator_has_errors => sub {
             my $c      = shift;
-            my $errors = $c->stash('validate_tiny_errors');
+            my $errors = $c->stash('validate_tiny.errors');
 
             return 0 if !$errors || !keys %$errors;
             return 1;
@@ -99,7 +101,7 @@ sub register {
     $app->helper(
         validator_error => sub {
             my ( $c, $name ) = @_;
-            my $errors = $c->stash('validate_tiny_errors');
+            my $errors = $c->stash('validate_tiny.errors');
 
             return $errors unless defined $name;
 
@@ -108,11 +110,21 @@ sub register {
             }
         } );
 
-    # Helper validator_one_error
+    # Helper validator_error_string
+    $app->helper(
+        validator_error_string => sub {
+            my ( $c, $params ) = @_;
+            return '' unless $c->validator_has_errors();
+            $params //= {};
+
+		    return $c->stash('validate_tiny.result')->error_string(%$params);
+        } );        
+
+    # Helper validator_any_error
     $app->helper(
         validator_any_error => sub {
             my ( $c ) = @_;
-            my $errors = $c->stash('validate_tiny_errors');
+            my $errors = $c->stash('validate_tiny.errors');
             
             if ( $errors ) {
                 return ( ( values %$errors )[0] );
@@ -127,7 +139,7 @@ sub register {
         after_dispatch => sub {
             my ($c) = @_;
             my $stash = $c->stash;
-            return 1 if $stash->{was_validate_tiny_called};
+            return 1 if $stash->{'validate_tiny.was_called'};
             
             if ( $stash->{controller} && $stash->{action} ) {
                 $log->debug("ValidateTiny: No validation in [$stash->{controller}#$stash->{action}]");    
@@ -291,6 +303,15 @@ Returns the appropriate error.
     my $username_error = $self->validator_error('username');
 
     <%= validator_error 'username' %>
+
+=head2 C<validator_error_string>
+
+Returns a string with all errors (an empty string in case of no errors).
+Helper maps directly to Validate::Tiny::error_string method ( see L<Validate::Tiny/"error_string"> )
+
+    my $error_str = $self->validator_error_string();
+
+    <%= validator_error_string %>
     
 =head2 C<validator_any_error>
     

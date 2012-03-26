@@ -5,3 +5,6 @@ Revision history for Mojolicious::Plugin::ValidateTiny
         
 0.08
         Fixed typo
+
+0.10
+       Added "validator_error_string" helper        
