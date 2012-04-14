@@ -7,7 +7,7 @@ use warnings;
 use Carp qw/croak/;
 use Validate::Tiny;
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 sub register {
     my ( $self, $app, $conf ) = @_;
@@ -33,7 +33,7 @@ sub register {
             $rules->{fields} ||= [];
 
             # Validate GET+POST parameters by default
-            $params ||= { map { $_ => $c->param($_) } $c->param };
+            $params ||= { map { $_ => ( $c->param($_) // undef ) } $c->param };
             
             # Autofill fields
             if ( $conf->{autofields} ) {
@@ -236,7 +236,7 @@ If "explicit" is true then for every field must be provided check rule
 
 =head2 C<autofields> (default 1)
 
-If "autofields" then validator will automatically create fields list based on passed checks.
+If "autofields" then validator will automatically create fields list based on checks passed to validator.
 So, you can pass: 
     [
         user => is_required(),
@@ -255,7 +255,7 @@ instead of
 
 =head2 C<exclude> (default [])
 
-Is an arrayref with a list of fields that will be never checked.
+Is an arrayref with a list of fields (names or regexps) that will not be affected by C<explicit> option.
 
 For example, if you use "Mojolicious::Plugin::CSRFProtect" then you should add "csrftoken" to exclude list.
 
