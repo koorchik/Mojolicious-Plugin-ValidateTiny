@@ -12,3 +12,6 @@ Revision history for Mojolicious::Plugin::ValidateTiny
 0.11
         Improved POD
         Added fix for potential problem which will appear if $c->param($field) will return empty list
+        
+0.12
+        Added support for parameters with multiple values        

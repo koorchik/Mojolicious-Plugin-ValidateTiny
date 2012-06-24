@@ -7,7 +7,7 @@ use warnings;
 use Carp qw/croak/;
 use Validate::Tiny;
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 sub register {
     my ( $self, $app, $conf ) = @_;
@@ -33,7 +33,10 @@ sub register {
             $rules->{fields} ||= [];
 
             # Validate GET+POST parameters by default
-            $params ||= { map { $_ => ( $c->param($_) // undef ) } $c->param };
+            $params ||= { map {
+                my @values = $c->param($_);
+                $_ => ( @values > 1 ? \@values : ( $values[0] // undef ) ); 
+            } $c->param };
             
             # Autofill fields
             if ( $conf->{autofields} ) {
