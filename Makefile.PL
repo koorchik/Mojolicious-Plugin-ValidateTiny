@@ -14,6 +14,11 @@ WriteMakefile(
         'Mojolicious'    => 2.42,
         'Validate::Tiny' => 0.08
     },
+    META_MERGE   => {
+        resources => {
+            repository  =>  'https://github.com/koorchik/Mojolicious-Plugin-ValidateTiny',
+        },
+    },
     PREREQ_PRINT => 1,
     test => { TESTS => 't/*.t' },
     dist      => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
