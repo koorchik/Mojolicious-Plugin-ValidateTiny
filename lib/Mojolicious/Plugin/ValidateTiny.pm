@@ -34,10 +34,10 @@ sub register {
             $rules->{fields} ||= [];
 
             # Validate GET+POST parameters by default
-            $params ||= { map {
-                my @values = $c->param($_);
-                $_ => ( @values > 1 ? \@values : ( $values[0] // undef ) ); 
-            } $c->param };
+            $params ||= $c->req->params->to_hash();
+
+            #Latest mojolicious has an issue in that it doesn't include route supplied parameters so we need to hack that in.
+            $params = { %{$params},  %{$c->stash->{'mojo.captures'}} };
             
             # Autofill fields
             if ( $conf->{autofields} ) {
