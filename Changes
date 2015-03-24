@@ -15,3 +15,7 @@ Revision history for Mojolicious::Plugin::ValidateTiny
         
 0.12
         Added support for parameters with multiple values        
+
+0.13 
+        Added support for latest Mojolicious 6. 
+            - params no longer gives us a list back
