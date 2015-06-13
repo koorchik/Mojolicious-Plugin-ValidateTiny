@@ -5,7 +5,7 @@ use v5.10;
 use strict;
 use warnings;
 use Carp qw/croak/;
-use Validate::Tiny;
+use Validate::Tiny 1.501;
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 our $VERSION = '0.14';
@@ -78,7 +78,7 @@ sub register {
             }
 
             # Do validation
-            my $result = Validate::Tiny->new( $params, $rules );
+            my $result = Validate::Tiny->check( $params, $rules );
             $c->stash( 'validate_tiny.result' => $result );
 
             if ( $result->success ) {
