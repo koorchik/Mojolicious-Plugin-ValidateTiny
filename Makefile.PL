@@ -12,7 +12,7 @@ WriteMakefile(
     MIN_PERL_VERSION => 5.010,
     PREREQ_PM    => {
         'Mojolicious'    => 6.00,
-        'Validate::Tiny' => 0.08
+        'Validate::Tiny' => 1.501
     },
     META_MERGE   => {
         resources => {
