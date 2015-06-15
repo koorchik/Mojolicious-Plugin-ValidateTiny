@@ -8,7 +8,7 @@ use Carp qw/croak/;
 use Validate::Tiny 1.501;
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 sub register {
     my ( $self, $app, $conf ) = @_;
