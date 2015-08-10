@@ -8,7 +8,7 @@ use Carp qw/croak/;
 use Validate::Tiny 1.501;
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 
 sub register {
     my ( $self, $app, $conf ) = @_;
@@ -77,8 +77,15 @@ sub register {
                 }
             }
 
-            # Do validation
-            my $result = Validate::Tiny->check( $params, $rules );
+            # Do validation, Validate::Tiny made a breaking change and we need to support old and new users
+            my $result; 
+            if(Validate::Tiny->can('check')) {
+                $result = Validate::Tiny->check( $params, $rules );
+            }
+            else { # Fall back for old Validate::Tiny version
+                $result = Validate::Tiny->new( $params, $rules );
+            }
+            
             $c->stash( 'validate_tiny.result' => $result );
 
             if ( $result->success ) {
