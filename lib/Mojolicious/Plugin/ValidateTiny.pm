@@ -5,7 +5,7 @@ use v5.10;
 use strict;
 use warnings;
 use Carp qw/croak/;
-use Validate::Tiny 1.501;
+use Validate::Tiny;
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 our $VERSION = '0.16';
