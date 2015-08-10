@@ -11,8 +11,8 @@ WriteMakefile(
     AUTHOR       => 'Viktor Turskyi <koorchik@cpan.org>',
     MIN_PERL_VERSION => 5.010,
     PREREQ_PM    => {
-        'Mojolicious'    => 2.42,
-        'Validate::Tiny' => 0.08
+        'Mojolicious'    => 6.00,
+        'Validate::Tiny' => 1.501
     },
     META_MERGE   => {
         resources => {
@@ -23,5 +23,5 @@ WriteMakefile(
     test => { TESTS => 't/*.t' },
     dist      => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES => 'Mojolicious-Plugin-ValidateTiny-*' },
-    
+
 );
