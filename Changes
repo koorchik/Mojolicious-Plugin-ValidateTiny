@@ -21,3 +21,8 @@ Revision history for Mojolicious::Plugin::ValidateTiny
             - params no longer gives us a list back
 0.15
         Fix compatibility with the latest version of Validate::Tiny
+
+0.16
+        Maintain compatability with older versions of Validate::Tiny,
+        useful for breaking the link between Validate::Tiny and Mojolicious 
+        both forcing you to update each other        
