@@ -302,7 +302,7 @@ Check if there are any errors.
         $self->render_text( $self->validator_any_error );
     }
 
-    %= if (validator_has_errors) {
+    % if (validator_has_errors) {
         <div class="error">Please, correct the errors below.</div>
     % }
 
