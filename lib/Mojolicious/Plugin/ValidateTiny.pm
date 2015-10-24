@@ -170,6 +170,8 @@ Mojolicious::Plugin::ValidateTiny - Lightweight validator for Mojolicious
 
 =head1 SYNOPSIS
 
+    use Validate::Tiny ':all';
+
     # Mojolicious
     $self->plugin('ValidateTiny');
 
