@@ -36,6 +36,9 @@ sub register {
             # Validate GET+POST parameters by default
             $params ||= $c->req->params->to_hash();
 
+            # Validate Uploaded files by default
+            $params->{ $_->name } ||= $_ for (@{ $c->req->uploads });
+
             #Latest mojolicious has an issue in that it doesn't include route supplied parameters so we need to hack that in.
             $params = { %{$params},  %{$c->stash->{'mojo.captures'}} };
 
